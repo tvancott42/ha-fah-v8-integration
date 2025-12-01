@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Folding@home Client",
-        "description": "Enter the connection details for your Folding@home client.",
+        "title": "Connect to Folding@home v8 Client",
+        "description": "Enter the connection details for your Folding@home v8 client.",
         "data": {
           "host": "Host",
           "port": "Port"
@@ -11,12 +11,12 @@
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to the Folding@home client. Ensure it is running and accessible.",
-      "timeout": "Connection timed out. Ensure the Folding@home client is running and the port is correct.",
+      "cannot_connect": "Unable to connect to the Folding@home v8 client. Ensure it is running and accessible.",
+      "timeout": "Connection timed out. Ensure the Folding@home v8 client is running and the port is correct.",
       "unknown": "An unexpected error occurred."
     },
     "abort": {
-      "already_configured": "This Folding@home client is already configured."
+      "already_configured": "This Folding@home v8 client is already configured."
     }
   },
   "entity": {

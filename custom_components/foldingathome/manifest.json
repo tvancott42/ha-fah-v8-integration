@@ -1,6 +1,6 @@
 {
   "domain": "foldingathome",
-  "name": "Folding@home",
+  "name": "Folding@home v8",
   "codeowners": ["@tvancott42"],
   "config_flow": true,
   "dependencies": [],
