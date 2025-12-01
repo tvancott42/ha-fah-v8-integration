@@ -87,7 +87,10 @@ class FAHStatusSensor(FAHBaseSensor):
         """Return status."""
         if not self.coordinator.data:
             return "unknown"
-        config = self.coordinator.data.get("config", {})
+        # State is in the default group's config, not top-level config
+        groups = self.coordinator.data.get("groups", {})
+        default_group = groups.get("", {})
+        config = default_group.get("config", {})
         if config.get("finish"):
             return "finishing"
         if config.get("paused"):

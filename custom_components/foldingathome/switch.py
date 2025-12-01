@@ -62,13 +62,16 @@ class FAHFoldingSwitch(CoordinatorEntity[FAHDataUpdateCoordinator], SwitchEntity
         """Return true if folding."""
         if not self.coordinator.data:
             return False
-        config = self.coordinator.data.get("config", {})
+        # State is in the default group's config, not top-level config
+        groups = self.coordinator.data.get("groups", {})
+        default_group = groups.get("", {})
+        config = default_group.get("config", {})
         return not config.get("paused", True)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Resume folding."""
-        await self.coordinator.async_send_command({"cmd": "state", "state": "fold"})
+        await self.coordinator.async_send_command({"cmd": "state", "state": "fold", "group": ""})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause folding."""
-        await self.coordinator.async_send_command({"cmd": "state", "state": "pause"})
+        await self.coordinator.async_send_command({"cmd": "state", "state": "pause", "group": ""})
