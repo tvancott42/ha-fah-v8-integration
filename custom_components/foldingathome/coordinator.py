@@ -80,17 +80,22 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Wait for initial state
             msg = await self._ws.receive(timeout=WEBSOCKET_TIMEOUT)
+            _LOGGER.debug("FAH raw message type: %s", msg.type)
             if msg.type == aiohttp.WSMsgType.TEXT:
                 data = msg.data
+                _LOGGER.debug("FAH raw data (first 1000 chars): %s", data[:1000])
                 if data != "ping":
                     try:
                         parsed = json.loads(data)
+                        _LOGGER.debug("FAH parsed type: %s, keys: %s", type(parsed).__name__, list(parsed.keys()) if isinstance(parsed, dict) else "N/A")
                         if isinstance(parsed, dict):
-                            _LOGGER.debug(
-                                "FAH initial state - config: %s, groups: %s",
-                                parsed.get("config"),
-                                parsed.get("groups"),
+                            _LOGGER.info(
+                                "FAH state - config.paused: %s, config.finish: %s",
+                                parsed.get("config", {}).get("paused"),
+                                parsed.get("config", {}).get("finish"),
                             )
+                            _LOGGER.debug("FAH full config: %s", parsed.get("config"))
+                            _LOGGER.debug("FAH groups: %s", parsed.get("groups"))
                             self.async_set_updated_data(parsed)
                     except json.JSONDecodeError as err:
                         _LOGGER.warning("Invalid JSON from FAH: %s", err)
