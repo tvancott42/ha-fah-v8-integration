@@ -72,7 +72,7 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current = new_data
         for i, key in enumerate(path[:-1]):
             if isinstance(current, dict):
-                if key not in current:
+                if key not in current or current[key] is None:
                     current[key] = {}
                 # Make a copy at each level to avoid mutating original
                 current[key] = dict(current[key]) if isinstance(current[key], dict) else current[key]
@@ -81,6 +81,8 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Handle list indices (e.g., ["units", 0, "ppd", 123])
                 idx = int(key) if isinstance(key, (int, str)) and str(key).isdigit() else key
                 if isinstance(idx, int) and 0 <= idx < len(current):
+                    if current[idx] is None:
+                        current[idx] = {}
                     if isinstance(current[idx], dict):
                         current[idx] = dict(current[idx])
                     current = current[idx]
@@ -174,11 +176,15 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         continue
                     try:
                         parsed = json.loads(data)
+                        if parsed is None:
+                            # Server sent null, likely during shutdown/reconnect
+                            _LOGGER.debug("FAH sent null message, ignoring")
+                            continue
                         if isinstance(parsed, dict):
                             # Full state update
                             groups = parsed.get("groups", {})
-                            default_group = groups.get("", {})
-                            group_config = default_group.get("config", {})
+                            default_group = groups.get("", {}) if groups else {}
+                            group_config = default_group.get("config", {}) if default_group else {}
                             _LOGGER.debug(
                                 "FAH full state - paused: %s, finish: %s",
                                 group_config.get("paused"),
@@ -191,7 +197,8 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except json.JSONDecodeError:
                         _LOGGER.warning("Invalid JSON from FAH: %s", data[:100])
                 elif msg.type == aiohttp.WSMsgType.ERROR:
-                    _LOGGER.error("WebSocket error: %s", self._ws.exception())
+                    ws_exception = self._ws.exception() if self._ws else None
+                    _LOGGER.error("WebSocket error: %s", ws_exception)
                     break
                 elif msg.type in (
                     aiohttp.WSMsgType.CLOSE,
