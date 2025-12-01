@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Folding@home Client",
+        "description": "Enter the connection details for your Folding@home client.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the Folding@home client. Ensure it is running and accessible.",
+      "timeout": "Connection timed out. Ensure the Folding@home client is running and the port is correct.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Folding@home client is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status"
+      },
+      "ppd": {
+        "name": "Points Per Day"
+      },
+      "active_cpus": {
+        "name": "Active CPUs"
+      },
+      "work_units": {
+        "name": "Work Units"
+      }
+    },
+    "switch": {
+      "folding": {
+        "name": "Folding"
+      }
+    },
+    "button": {
+      "finish": {
+        "name": "Finish & Pause"
+      }
+    }
+  }
+}

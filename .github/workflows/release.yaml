@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update manifest version
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          jq --arg version "$VERSION" '.version = $version' \
+            custom_components/foldingathome/manifest.json > tmp.json
+          mv tmp.json custom_components/foldingathome/manifest.json
+
+      - name: Create release zip
+        run: |
+          cd custom_components
+          zip -r ../foldingathome.zip foldingathome
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: foldingathome.zip
