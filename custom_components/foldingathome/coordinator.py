@@ -145,9 +145,11 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except json.JSONDecodeError as err:
                         _LOGGER.warning("Invalid JSON from FAH: %s", err)
 
-            # Start listener task
+            # Start listener task as background task so it doesn't block HA startup
             if self._listen_task is None or self._listen_task.done():
-                self._listen_task = self.hass.async_create_task(self._listen())
+                self._listen_task = self.hass.async_create_background_task(
+                    self._listen(), f"fah_listener_{self.host}"
+                )
 
         except asyncio.TimeoutError as err:
             raise UpdateFailed(f"Timeout connecting to FAH client: {err}") from err
