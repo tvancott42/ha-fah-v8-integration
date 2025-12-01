@@ -102,7 +102,8 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Start listener task
             if self._listen_task is None or self._listen_task.done():
-                self._listen_task = asyncio.create_task(self._listen())
+                _LOGGER.info("FAH starting WebSocket listener task")
+                self._listen_task = self.hass.async_create_task(self._listen())
 
         except asyncio.TimeoutError as err:
             raise UpdateFailed(f"Timeout connecting to FAH client: {err}") from err
@@ -114,7 +115,7 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._ws is None:
             return
 
-        _LOGGER.debug("FAH WebSocket listener started")
+        _LOGGER.info("FAH WebSocket listener started, ws closed: %s", self._ws.closed if self._ws else "None")
         try:
             async for msg in self._ws:
                 if self._shutdown:
@@ -156,11 +157,12 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("WebSocket closed")
                     break
         except asyncio.CancelledError:
-            _LOGGER.debug("WebSocket listener cancelled")
+            _LOGGER.info("WebSocket listener cancelled")
             raise
         except Exception as err:
-            _LOGGER.error("WebSocket listener error: %s", err)
+            _LOGGER.error("WebSocket listener error: %s", err, exc_info=True)
         finally:
+            _LOGGER.info("FAH WebSocket listener ended")
             await self._disconnect()
             # Schedule reconnection if not shutting down
             if not self._shutdown:
