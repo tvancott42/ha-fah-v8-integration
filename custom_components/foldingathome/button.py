@@ -57,4 +57,4 @@ class FAHFinishButton(CoordinatorEntity[FAHDataUpdateCoordinator], ButtonEntity)
 
     async def async_press(self) -> None:
         """Handle button press."""
-        await self.coordinator.async_send_command(["state", "finish"])
+        await self.coordinator.async_send_command({"cmd": "state", "state": "finish"})

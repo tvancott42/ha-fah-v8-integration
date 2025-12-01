@@ -67,8 +67,8 @@ class FAHFoldingSwitch(CoordinatorEntity[FAHDataUpdateCoordinator], SwitchEntity
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Resume folding."""
-        await self.coordinator.async_send_command(["state", "unpause"])
+        await self.coordinator.async_send_command({"cmd": "state", "state": "fold"})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Pause folding."""
-        await self.coordinator.async_send_command(["state", "pause"])
+        await self.coordinator.async_send_command({"cmd": "state", "state": "pause"})

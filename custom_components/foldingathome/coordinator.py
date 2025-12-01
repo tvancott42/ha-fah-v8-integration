@@ -187,8 +187,14 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._session.close()
         self._session = None
 
-    async def async_send_command(self, command: list) -> None:
-        """Send command to FAH client."""
+    async def async_send_command(self, command: dict[str, Any]) -> None:
+        """Send command to FAH client.
+
+        Commands should be dicts like:
+            {"cmd": "state", "state": "pause"}
+            {"cmd": "state", "state": "fold"}
+            {"cmd": "state", "state": "finish"}
+        """
         if self._ws is None or self._ws.closed:
             try:
                 await self._connect()
