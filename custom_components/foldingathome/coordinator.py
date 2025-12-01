@@ -86,6 +86,11 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     try:
                         parsed = json.loads(data)
                         if isinstance(parsed, dict):
+                            _LOGGER.debug(
+                                "FAH initial state - config: %s, groups: %s",
+                                parsed.get("config"),
+                                parsed.get("groups"),
+                            )
                             self.async_set_updated_data(parsed)
                     except json.JSONDecodeError as err:
                         _LOGGER.warning("Invalid JSON from FAH: %s", err)
@@ -118,6 +123,11 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         parsed = json.loads(data)
                         # Full state update (dict) vs command response (list)
                         if isinstance(parsed, dict):
+                            _LOGGER.debug(
+                                "FAH state update - config: %s, groups: %s",
+                                parsed.get("config"),
+                                parsed.get("groups"),
+                            )
                             self.async_set_updated_data(parsed)
                     except json.JSONDecodeError:
                         _LOGGER.warning("Invalid JSON from FAH: %s", data[:100])
