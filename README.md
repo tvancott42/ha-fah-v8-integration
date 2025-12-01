@@ -1,7 +1,7 @@
 # Folding@home v8 Integration for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
-[![Validate](https://github.com/yourgithub/ha-fah-v8/actions/workflows/validate.yaml/badge.svg)](https://github.com/yourgithub/ha-fah-v8/actions/workflows/validate.yaml)
+[![Validate](https://github.com/tvancott42/ha-fah-v8-integration/actions/workflows/validate.yaml/badge.svg)](https://github.com/tvancott42/ha-fah-v8-integration/actions/workflows/validate.yaml)
 
 A Home Assistant custom integration for monitoring and controlling [Folding@home](https://foldingathome.org/) v8.x clients via their local WebSocket API.
 

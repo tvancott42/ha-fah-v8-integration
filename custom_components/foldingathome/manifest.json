@@ -1,13 +1,13 @@
 {
   "domain": "foldingathome",
   "name": "Folding@home",
-  "codeowners": [],
+  "codeowners": ["@tvancott42"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/yourgithub/foldingathome-ha",
+  "documentation": "https://github.com/tvancott42/ha-fah-v8-integration",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/yourgithub/foldingathome-ha/issues",
+  "issue_tracker": "https://github.com/tvancott42/ha-fah-v8-integration/issues",
   "requirements": [],
   "version": "1.0.0"
 }
