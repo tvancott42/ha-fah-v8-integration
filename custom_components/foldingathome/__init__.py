@@ -21,6 +21,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
 
+    _LOGGER.debug("Setting up FAH integration for %s:%s", host, port)
     coordinator = FAHDataUpdateCoordinator(hass, host, port)
 
     try:
@@ -31,8 +32,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
+    _LOGGER.debug("Forwarding platform setups for %s", host)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    _LOGGER.debug("FAH integration setup complete for %s", host)
     return True
 
 
