@@ -131,33 +131,22 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.ws_url,
                 timeout=aiohttp.ClientTimeout(total=WEBSOCKET_TIMEOUT),
             )
-            _LOGGER.info("Connected to FAH client at %s", self.ws_url)
+            _LOGGER.debug("Connected to FAH client at %s", self.ws_url)
 
             # Wait for initial state
             msg = await self._ws.receive(timeout=WEBSOCKET_TIMEOUT)
-            _LOGGER.debug("FAH raw message type: %s", msg.type)
             if msg.type == aiohttp.WSMsgType.TEXT:
                 data = msg.data
-                _LOGGER.debug("FAH raw data (first 1000 chars): %s", data[:1000])
                 if data != "ping":
                     try:
                         parsed = json.loads(data)
-                        _LOGGER.debug("FAH parsed type: %s, keys: %s", type(parsed).__name__, list(parsed.keys()) if isinstance(parsed, dict) else "N/A")
                         if isinstance(parsed, dict):
-                            _LOGGER.info(
-                                "FAH state - config.paused: %s, config.finish: %s",
-                                parsed.get("config", {}).get("paused"),
-                                parsed.get("config", {}).get("finish"),
-                            )
-                            _LOGGER.debug("FAH full config: %s", parsed.get("config"))
-                            _LOGGER.debug("FAH groups: %s", parsed.get("groups"))
                             self.async_set_updated_data(parsed)
                     except json.JSONDecodeError as err:
                         _LOGGER.warning("Invalid JSON from FAH: %s", err)
 
             # Start listener task
             if self._listen_task is None or self._listen_task.done():
-                _LOGGER.info("FAH starting WebSocket listener task")
                 self._listen_task = self.hass.async_create_task(self._listen())
 
         except asyncio.TimeoutError as err:
@@ -170,20 +159,17 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._ws is None:
             return
 
-        _LOGGER.info("FAH WebSocket listener started, ws closed: %s", self._ws.closed if self._ws else "None")
+        _LOGGER.debug("FAH WebSocket listener started")
         try:
             async for msg in self._ws:
                 if self._shutdown:
                     break
 
-                _LOGGER.debug("FAH listener received message type: %s", msg.type)
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     data = msg.data
                     # Ignore ping messages
                     if data == "ping":
-                        _LOGGER.debug("FAH received ping")
                         continue
-                    _LOGGER.debug("FAH listener data (first 200): %s", data[:200])
                     try:
                         parsed = json.loads(data)
                         if isinstance(parsed, dict):
@@ -191,7 +177,7 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             groups = parsed.get("groups", {})
                             default_group = groups.get("", {})
                             group_config = default_group.get("config", {})
-                            _LOGGER.info(
+                            _LOGGER.debug(
                                 "FAH full state - paused: %s, finish: %s",
                                 group_config.get("paused"),
                                 group_config.get("finish"),
@@ -200,8 +186,6 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         elif isinstance(parsed, list) and len(parsed) >= 2:
                             # Incremental update: ["path", "to", "key", value]
                             self._apply_incremental_update(parsed)
-                        else:
-                            _LOGGER.debug("FAH unknown response: %s", parsed)
                     except json.JSONDecodeError:
                         _LOGGER.warning("Invalid JSON from FAH: %s", data[:100])
                 elif msg.type == aiohttp.WSMsgType.ERROR:
@@ -215,12 +199,11 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("WebSocket closed")
                     break
         except asyncio.CancelledError:
-            _LOGGER.info("WebSocket listener cancelled")
+            _LOGGER.debug("WebSocket listener cancelled")
             raise
         except Exception as err:
-            _LOGGER.error("WebSocket listener error: %s", err, exc_info=True)
+            _LOGGER.error("WebSocket listener error: %s", err)
         finally:
-            _LOGGER.info("FAH WebSocket listener ended")
             await self._disconnect()
             # Schedule reconnection if not shutting down
             if not self._shutdown:

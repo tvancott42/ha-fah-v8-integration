@@ -30,6 +30,7 @@ async def async_setup_entry(
         FAHStatusSensor(coordinator, entry),
         FAHPPDSensor(coordinator, entry),
         FAHCPUSensor(coordinator, entry),
+        FAHGPUSensor(coordinator, entry),
         FAHWorkUnitsSensor(coordinator, entry),
     ]
 
@@ -145,7 +146,10 @@ class FAHCPUSensor(FAHBaseSensor):
         """Return active CPU count."""
         if not self.coordinator.data:
             return 0
-        config = self.coordinator.data.get("config", {})
+        # CPUs allocated is in the default group's config
+        groups = self.coordinator.data.get("groups", {})
+        default_group = groups.get("", {})
+        config = default_group.get("config", {})
         return config.get("cpus", 0)
 
     @property
@@ -155,6 +159,65 @@ class FAHCPUSensor(FAHBaseSensor):
             return {}
         info = self.coordinator.data.get("info", {})
         return {"total_cpus": info.get("cpus", 0)}
+
+
+class FAHGPUSensor(FAHBaseSensor):
+    """Sensor for active GPUs."""
+
+    _attr_icon = "mdi:expansion-card"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_translation_key = "active_gpus"
+
+    def __init__(
+        self,
+        coordinator: FAHDataUpdateCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{self._machine_id}_gpus"
+
+    @property
+    def native_value(self) -> int:
+        """Return active GPU count."""
+        if not self.coordinator.data:
+            return 0
+        # GPUs enabled is in the default group's config
+        groups = self.coordinator.data.get("groups", {})
+        default_group = groups.get("", {})
+        config = default_group.get("config", {})
+        gpus = config.get("gpus", {})
+        # Count enabled GPUs
+        return sum(1 for gpu in gpus.values() if gpu.get("enabled", False))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return GPU details."""
+        if not self.coordinator.data:
+            return {"total_gpus": 0, "gpus": []}
+
+        info = self.coordinator.data.get("info", {})
+        info_gpus = info.get("gpus", {})
+
+        groups = self.coordinator.data.get("groups", {})
+        default_group = groups.get("", {})
+        config = default_group.get("config", {})
+        config_gpus = config.get("gpus", {})
+
+        gpu_list = []
+        for gpu_id, gpu_info in info_gpus.items():
+            enabled = config_gpus.get(gpu_id, {}).get("enabled", False)
+            gpu_list.append({
+                "id": gpu_id,
+                "description": gpu_info.get("description", "Unknown"),
+                "type": gpu_info.get("type", "unknown"),
+                "enabled": enabled,
+            })
+
+        return {
+            "total_gpus": len(info_gpus),
+            "gpus": gpu_list,
+        }
 
 
 class FAHWorkUnitsSensor(FAHBaseSensor):
