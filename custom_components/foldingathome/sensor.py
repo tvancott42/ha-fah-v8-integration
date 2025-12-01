@@ -51,14 +51,14 @@ class FAHBaseSensor(CoordinatorEntity[FAHDataUpdateCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._entry = entry
 
-        info = coordinator.data.get("info", {}) if coordinator.data else {}
+        info = (coordinator.data.get("info") or {}) if coordinator.data else {}
         self._machine_id = info.get("id", entry.entry_id)
         self._machine_name = info.get("mach_name", "FAH Client")
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
-        info = self.coordinator.data.get("info", {}) if self.coordinator.data else {}
+        info = (self.coordinator.data.get("info") or {}) if self.coordinator.data else {}
         return DeviceInfo(
             identifiers={(DOMAIN, self._machine_id)},
             name=self._machine_name,
@@ -89,9 +89,9 @@ class FAHStatusSensor(FAHBaseSensor):
         if not self.coordinator.data:
             return "unknown"
         # State is in the default group's config, not top-level config
-        groups = self.coordinator.data.get("groups", {})
-        default_group = groups.get("", {})
-        config = default_group.get("config", {})
+        groups = self.coordinator.data.get("groups") or {}
+        default_group = groups.get("") or {}
+        config = default_group.get("config") or {}
         if config.get("finish"):
             return "finishing"
         if config.get("paused"):
@@ -147,9 +147,9 @@ class FAHCPUSensor(FAHBaseSensor):
         if not self.coordinator.data:
             return 0
         # CPUs allocated is in the default group's config
-        groups = self.coordinator.data.get("groups", {})
-        default_group = groups.get("", {})
-        config = default_group.get("config", {})
+        groups = self.coordinator.data.get("groups") or {}
+        default_group = groups.get("") or {}
+        config = default_group.get("config") or {}
         return config.get("cpus", 0)
 
     @property
@@ -157,7 +157,7 @@ class FAHCPUSensor(FAHBaseSensor):
         """Return additional attributes."""
         if not self.coordinator.data:
             return {}
-        info = self.coordinator.data.get("info", {})
+        info = self.coordinator.data.get("info") or {}
         return {"total_cpus": info.get("cpus", 0)}
 
 
@@ -183,10 +183,10 @@ class FAHGPUSensor(FAHBaseSensor):
         if not self.coordinator.data:
             return 0
         # GPUs enabled is in the default group's config
-        groups = self.coordinator.data.get("groups", {})
-        default_group = groups.get("", {})
-        config = default_group.get("config", {})
-        gpus = config.get("gpus", {})
+        groups = self.coordinator.data.get("groups") or {}
+        default_group = groups.get("") or {}
+        config = default_group.get("config") or {}
+        gpus = config.get("gpus") or {}
         # Count enabled GPUs
         return sum(1 for gpu in gpus.values() if gpu.get("enabled", False))
 
@@ -196,17 +196,18 @@ class FAHGPUSensor(FAHBaseSensor):
         if not self.coordinator.data:
             return {"total_gpus": 0, "gpus": []}
 
-        info = self.coordinator.data.get("info", {})
-        info_gpus = info.get("gpus", {})
+        info = self.coordinator.data.get("info") or {}
+        info_gpus = info.get("gpus") or {}
 
-        groups = self.coordinator.data.get("groups", {})
-        default_group = groups.get("", {})
-        config = default_group.get("config", {})
-        config_gpus = config.get("gpus", {})
+        groups = self.coordinator.data.get("groups") or {}
+        default_group = groups.get("") or {}
+        config = default_group.get("config") or {}
+        config_gpus = config.get("gpus") or {}
 
         gpu_list = []
         for gpu_id, gpu_info in info_gpus.items():
-            enabled = config_gpus.get(gpu_id, {}).get("enabled", False)
+            gpu_config = config_gpus.get(gpu_id) or {}
+            enabled = gpu_config.get("enabled", False)
             gpu_list.append({
                 "id": gpu_id,
                 "description": gpu_info.get("description", "Unknown"),
@@ -252,7 +253,7 @@ class FAHWorkUnitsSensor(FAHBaseSensor):
         return {
             "units": [
                 {
-                    "project": u.get("assignment", {}).get("project"),
+                    "project": (u.get("assignment") or {}).get("project"),
                     "progress": round(u.get("progress", 0) * 100, 1),
                     "state": u.get("state"),
                     "ppd": u.get("ppd", 0),

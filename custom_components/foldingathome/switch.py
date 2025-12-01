@@ -39,7 +39,7 @@ class FAHFoldingSwitch(CoordinatorEntity[FAHDataUpdateCoordinator], SwitchEntity
         """Initialize switch."""
         super().__init__(coordinator)
 
-        info = coordinator.data.get("info", {}) if coordinator.data else {}
+        info = (coordinator.data.get("info") or {}) if coordinator.data else {}
         self._machine_id = info.get("id", entry.entry_id)
         self._machine_name = info.get("mach_name", "FAH Client")
 
@@ -48,7 +48,7 @@ class FAHFoldingSwitch(CoordinatorEntity[FAHDataUpdateCoordinator], SwitchEntity
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
-        info = self.coordinator.data.get("info", {}) if self.coordinator.data else {}
+        info = (self.coordinator.data.get("info") or {}) if self.coordinator.data else {}
         return DeviceInfo(
             identifiers={(DOMAIN, self._machine_id)},
             name=self._machine_name,
@@ -63,9 +63,9 @@ class FAHFoldingSwitch(CoordinatorEntity[FAHDataUpdateCoordinator], SwitchEntity
         if not self.coordinator.data:
             return False
         # State is in the default group's config, not top-level config
-        groups = self.coordinator.data.get("groups", {})
-        default_group = groups.get("", {})
-        config = default_group.get("config", {})
+        groups = self.coordinator.data.get("groups") or {}
+        default_group = groups.get("") or {}
+        config = default_group.get("config") or {}
         return not config.get("paused", True)
 
     async def async_turn_on(self, **kwargs: Any) -> None:

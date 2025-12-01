@@ -80,6 +80,6 @@ class FAHConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 msg = await ws.receive(timeout=WEBSOCKET_TIMEOUT)
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     data = json.loads(msg.data)
-                    return data.get("info", {})
+                    return data.get("info") or {}
 
         raise Exception("No data received from FAH client")

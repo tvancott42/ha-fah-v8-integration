@@ -37,7 +37,7 @@ class FAHFinishButton(CoordinatorEntity[FAHDataUpdateCoordinator], ButtonEntity)
         """Initialize button."""
         super().__init__(coordinator)
 
-        info = coordinator.data.get("info", {}) if coordinator.data else {}
+        info = (coordinator.data.get("info") or {}) if coordinator.data else {}
         self._machine_id = info.get("id", entry.entry_id)
         self._machine_name = info.get("mach_name", "FAH Client")
 
@@ -46,7 +46,7 @@ class FAHFinishButton(CoordinatorEntity[FAHDataUpdateCoordinator], ButtonEntity)
     @property
     def device_info(self) -> DeviceInfo:
         """Return device info."""
-        info = self.coordinator.data.get("info", {}) if self.coordinator.data else {}
+        info = (self.coordinator.data.get("info") or {}) if self.coordinator.data else {}
         return DeviceInfo(
             identifiers={(DOMAIN, self._machine_id)},
             name=self._machine_name,

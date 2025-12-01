@@ -44,14 +44,16 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def machine_id(self) -> str | None:
         """Get machine ID from data."""
         if self.data:
-            return self.data.get("info", {}).get("id")
+            info = self.data.get("info") or {}
+            return info.get("id")
         return None
 
     @property
     def machine_name(self) -> str:
         """Get machine name from data."""
         if self.data:
-            return self.data.get("info", {}).get("mach_name", "FAH Client")
+            info = self.data.get("info") or {}
+            return info.get("mach_name", "FAH Client")
         return "FAH Client"
 
     def _apply_incremental_update(self, update: list) -> None:
@@ -182,9 +184,9 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             continue
                         if isinstance(parsed, dict):
                             # Full state update
-                            groups = parsed.get("groups", {})
-                            default_group = groups.get("", {}) if groups else {}
-                            group_config = default_group.get("config", {}) if default_group else {}
+                            groups = parsed.get("groups") or {}
+                            default_group = groups.get("") or {}
+                            group_config = default_group.get("config") or {}
                             _LOGGER.debug(
                                 "FAH full state - paused: %s, finish: %s",
                                 group_config.get("paused"),
