@@ -54,6 +54,61 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self.data.get("info", {}).get("mach_name", "FAH Client")
         return "FAH Client"
 
+    def _apply_incremental_update(self, update: list) -> None:
+        """Apply an incremental update to the stored state.
+
+        Updates come as arrays like: ["groups", "", "config", "paused", false]
+        This represents: state["groups"][""]["config"]["paused"] = false
+        """
+        if not self.data or len(update) < 2:
+            return
+
+        # Make a shallow copy of data to modify
+        new_data = dict(self.data)
+        path = update[:-1]  # All but last element is the path
+        value = update[-1]  # Last element is the value
+
+        # Navigate to the parent of the target key
+        current = new_data
+        for i, key in enumerate(path[:-1]):
+            if isinstance(current, dict):
+                if key not in current:
+                    current[key] = {}
+                # Make a copy at each level to avoid mutating original
+                current[key] = dict(current[key]) if isinstance(current[key], dict) else current[key]
+                current = current[key]
+            elif isinstance(current, list):
+                # Handle list indices (e.g., ["units", 0, "ppd", 123])
+                idx = int(key) if isinstance(key, (int, str)) and str(key).isdigit() else key
+                if isinstance(idx, int) and 0 <= idx < len(current):
+                    if isinstance(current[idx], dict):
+                        current[idx] = dict(current[idx])
+                    current = current[idx]
+                else:
+                    _LOGGER.debug("FAH update path invalid at index %s: %s", key, update)
+                    return
+            else:
+                _LOGGER.debug("FAH update path not navigable at %s: %s", key, update)
+                return
+
+        # Set the final value
+        final_key = path[-1]
+        if isinstance(current, dict):
+            current[final_key] = value
+            # Log state changes for important fields
+            if path == ["groups", "", "config", "paused"]:
+                _LOGGER.info("FAH paused changed to: %s", value)
+            elif path == ["groups", "", "config", "finish"]:
+                _LOGGER.info("FAH finish changed to: %s", value)
+
+            self.async_set_updated_data(new_data)
+        elif isinstance(current, list) and isinstance(final_key, int):
+            if 0 <= final_key < len(current):
+                current[final_key] = value
+                self.async_set_updated_data(new_data)
+        else:
+            _LOGGER.debug("FAH could not apply update: %s", update)
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data - called by coordinator on interval as fallback."""
         # Primary updates come via WebSocket push
@@ -131,19 +186,22 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.debug("FAH listener data (first 200): %s", data[:200])
                     try:
                         parsed = json.loads(data)
-                        # Full state update (dict) vs command response (list)
                         if isinstance(parsed, dict):
+                            # Full state update
                             groups = parsed.get("groups", {})
                             default_group = groups.get("", {})
                             group_config = default_group.get("config", {})
                             _LOGGER.info(
-                                "FAH push update - paused: %s, finish: %s",
+                                "FAH full state - paused: %s, finish: %s",
                                 group_config.get("paused"),
                                 group_config.get("finish"),
                             )
                             self.async_set_updated_data(parsed)
+                        elif isinstance(parsed, list) and len(parsed) >= 2:
+                            # Incremental update: ["path", "to", "key", value]
+                            self._apply_incremental_update(parsed)
                         else:
-                            _LOGGER.debug("FAH non-dict response: %s", parsed)
+                            _LOGGER.debug("FAH unknown response: %s", parsed)
                     except json.JSONDecodeError:
                         _LOGGER.warning("Invalid JSON from FAH: %s", data[:100])
                 elif msg.type == aiohttp.WSMsgType.ERROR:
