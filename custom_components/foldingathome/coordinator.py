@@ -262,16 +262,24 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             {"cmd": "state", "state": "fold"}
             {"cmd": "state", "state": "finish"}
         """
-        if self._ws is None or self._ws.closed:
-            try:
-                await self._connect()
-            except UpdateFailed as err:
-                _LOGGER.error("Cannot send command, connection failed: %s", err)
-                return
+        # Try to send, reconnecting if necessary
+        for attempt in range(2):
+            if self._ws is None or self._ws.closed:
+                try:
+                    await self._connect()
+                except UpdateFailed as err:
+                    _LOGGER.error("Cannot send command, connection failed: %s", err)
+                    return
 
-        if self._ws is not None and not self._ws.closed:
-            try:
-                await self._ws.send_str(json.dumps(command))
-                _LOGGER.debug("Sent command to FAH: %s", command)
-            except aiohttp.ClientError as err:
-                _LOGGER.error("Failed to send command: %s", err)
+            if self._ws is not None:
+                try:
+                    await self._ws.send_str(json.dumps(command))
+                    _LOGGER.debug("Sent command to FAH: %s", command)
+                    return
+                except (aiohttp.ClientError, ConnectionResetError) as err:
+                    _LOGGER.warning("Failed to send command (attempt %d): %s", attempt + 1, err)
+                    # Force reconnect on next attempt
+                    await self._disconnect()
+                    if attempt == 0:
+                        continue
+                    _LOGGER.error("Failed to send command after retry: %s", err)
