@@ -121,8 +121,8 @@ class FAHPPDSensor(FAHBaseSensor):
         """Return total PPD."""
         if not self.coordinator.data:
             return 0
-        units = self.coordinator.data.get("units", [])
-        return sum(unit.get("ppd", 0) for unit in units)
+        units = self.coordinator.data.get("units") or []
+        return sum((unit.get("ppd", 0) if unit else 0) for unit in units)
 
 
 class FAHCPUSensor(FAHBaseSensor):
@@ -188,7 +188,7 @@ class FAHGPUSensor(FAHBaseSensor):
         config = default_group.get("config") or {}
         gpus = config.get("gpus") or {}
         # Count enabled GPUs
-        return sum(1 for gpu in gpus.values() if gpu.get("enabled", False))
+        return sum(1 for gpu in gpus.values() if gpu and gpu.get("enabled", False))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -206,6 +206,8 @@ class FAHGPUSensor(FAHBaseSensor):
 
         gpu_list = []
         for gpu_id, gpu_info in info_gpus.items():
+            if not gpu_info:
+                continue
             gpu_config = config_gpus.get(gpu_id) or {}
             enabled = gpu_config.get("enabled", False)
             gpu_list.append({
@@ -242,14 +244,14 @@ class FAHWorkUnitsSensor(FAHBaseSensor):
         """Return WU count."""
         if not self.coordinator.data:
             return 0
-        return len(self.coordinator.data.get("units", []))
+        return len(self.coordinator.data.get("units") or [])
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return WU details."""
         if not self.coordinator.data:
             return {"units": []}
-        units = self.coordinator.data.get("units", [])
+        units = self.coordinator.data.get("units") or []
         return {
             "units": [
                 {
@@ -259,5 +261,6 @@ class FAHWorkUnitsSensor(FAHBaseSensor):
                     "ppd": u.get("ppd", 0),
                 }
                 for u in units
+                if u is not None
             ]
         }

@@ -144,7 +144,7 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if data != "ping":
                     try:
                         parsed = json.loads(data)
-                        if isinstance(parsed, dict):
+                        if parsed is not None and isinstance(parsed, dict):
                             self.async_set_updated_data(parsed)
                     except json.JSONDecodeError as err:
                         _LOGGER.warning("Invalid JSON from FAH: %s", err)
