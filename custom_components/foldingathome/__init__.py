@@ -6,7 +6,6 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
 from .coordinator import FAHDataUpdateCoordinator
@@ -21,21 +20,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
 
-    _LOGGER.debug("Setting up FAH integration for %s:%s", host, port)
+    _LOGGER.info("Setting up FAH integration for %s:%s", host, port)
     coordinator = FAHDataUpdateCoordinator(hass, host, port)
 
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception as err:
-        _LOGGER.warning("Failed to connect to FAH client at %s:%s: %s", host, port, err)
-        raise ConfigEntryNotReady(f"Failed to connect to FAH client: {err}") from err
+    # Don't block setup on connection - let coordinator handle reconnection
+    # This allows HA to start even if FAH clients are offline
+    await coordinator.async_initialize()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
     _LOGGER.debug("Forwarding platform setups for %s", host)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    _LOGGER.debug("FAH integration setup complete for %s", host)
+    _LOGGER.info("FAH integration setup complete for %s (connected: %s)", host, coordinator._connected)
     return True
 
 
