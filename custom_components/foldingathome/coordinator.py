@@ -34,6 +34,9 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._listen_task: asyncio.Task | None = None
         self._reconnect_task: asyncio.Task | None = None
         self._shutdown: bool = False
+        self._reconnect_attempts: int = 0
+        self._max_reconnect_delay: int = 300  # 5 minutes max
+        self._connected: bool = False
 
     @property
     def ws_url(self) -> str:
@@ -127,15 +130,16 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         try:
-            if self._session is None or self._session.closed:
-                self._session = aiohttp.ClientSession()
+            # Close existing session to ensure clean state
+            await self._cleanup_session()
 
-            _LOGGER.debug("Connecting to FAH client at %s", self.ws_url)
+            self._session = aiohttp.ClientSession()
+
+            _LOGGER.info("Connecting to FAH client at %s (attempt %d)", self.ws_url, self._reconnect_attempts + 1)
             self._ws = await self._session.ws_connect(
                 self.ws_url,
                 timeout=aiohttp.ClientTimeout(total=WEBSOCKET_TIMEOUT),
             )
-            _LOGGER.debug("Connected to FAH client at %s", self.ws_url)
 
             # Wait for initial state
             msg = await self._ws.receive(timeout=WEBSOCKET_TIMEOUT)
@@ -146,8 +150,15 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         parsed = json.loads(data)
                         if parsed is not None and isinstance(parsed, dict):
                             self.async_set_updated_data(parsed)
+                            _LOGGER.info("Connected to FAH client at %s, received initial state", self.ws_url)
                     except json.JSONDecodeError as err:
                         _LOGGER.warning("Invalid JSON from FAH: %s", err)
+            elif msg.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+                raise aiohttp.ClientError(f"WebSocket closed immediately: {msg.type}")
+
+            # Connection successful - reset reconnect counter
+            self._reconnect_attempts = 0
+            self._connected = True
 
             # Start listener task as background task so it doesn't block HA startup
             if self._listen_task is None or self._listen_task.done():
@@ -156,16 +167,22 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
 
         except asyncio.TimeoutError as err:
+            self._connected = False
             raise UpdateFailed(f"Timeout connecting to FAH client: {err}") from err
         except aiohttp.ClientError as err:
+            self._connected = False
             raise UpdateFailed(f"Failed to connect to FAH client: {err}") from err
+        except Exception as err:
+            self._connected = False
+            _LOGGER.exception("Unexpected error connecting to FAH client")
+            raise UpdateFailed(f"Unexpected error connecting to FAH client: {err}") from err
 
     async def _listen(self) -> None:
         """Listen for WebSocket messages."""
         if self._ws is None:
             return
 
-        _LOGGER.debug("FAH WebSocket listener started")
+        _LOGGER.debug("FAH WebSocket listener started for %s", self.host)
         try:
             async for msg in self._ws:
                 if self._shutdown:
@@ -180,7 +197,7 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         parsed = json.loads(data)
                         if parsed is None:
                             # Server sent null, likely during shutdown/reconnect
-                            _LOGGER.debug("FAH sent null message, ignoring")
+                            _LOGGER.debug("FAH %s sent null message, ignoring", self.host)
                             continue
                         if isinstance(parsed, dict):
                             # Full state update
@@ -188,7 +205,8 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             default_group = groups.get("") or {}
                             group_config = default_group.get("config") or {}
                             _LOGGER.debug(
-                                "FAH full state - paused: %s, finish: %s",
+                                "FAH %s full state - paused: %s, finish: %s",
+                                self.host,
                                 group_config.get("paused"),
                                 group_config.get("finish"),
                             )
@@ -197,24 +215,25 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             # Incremental update: ["path", "to", "key", value]
                             self._apply_incremental_update(parsed)
                     except json.JSONDecodeError:
-                        _LOGGER.warning("Invalid JSON from FAH: %s", data[:100])
+                        _LOGGER.warning("Invalid JSON from FAH %s: %s", self.host, data[:100])
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     ws_exception = self._ws.exception() if self._ws else None
-                    _LOGGER.error("WebSocket error: %s", ws_exception)
+                    _LOGGER.error("WebSocket error from %s: %s", self.host, ws_exception)
                     break
                 elif msg.type in (
                     aiohttp.WSMsgType.CLOSE,
                     aiohttp.WSMsgType.CLOSING,
                     aiohttp.WSMsgType.CLOSED,
                 ):
-                    _LOGGER.debug("WebSocket closed")
+                    _LOGGER.info("WebSocket connection to %s closed", self.host)
                     break
         except asyncio.CancelledError:
-            _LOGGER.debug("WebSocket listener cancelled")
+            _LOGGER.debug("WebSocket listener for %s cancelled", self.host)
             raise
         except Exception as err:
-            _LOGGER.error("WebSocket listener error: %s", err)
+            _LOGGER.error("WebSocket listener error for %s: %s", self.host, err)
         finally:
+            _LOGGER.info("FAH client %s disconnected, will attempt reconnection", self.host)
             await self._disconnect()
             # Schedule reconnection if not shutting down
             if not self._shutdown:
@@ -222,27 +241,61 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _schedule_reconnect(self) -> None:
         """Schedule a reconnection attempt."""
+        if self._shutdown:
+            return
         if self._reconnect_task is None or self._reconnect_task.done():
-            self._reconnect_task = asyncio.create_task(self._reconnect())
+            self._reconnect_task = self.hass.async_create_background_task(
+                self._reconnect(), f"fah_reconnect_{self.host}"
+            )
 
     async def _reconnect(self) -> None:
-        """Attempt to reconnect after a delay."""
-        await asyncio.sleep(UPDATE_INTERVAL)
-        if not self._shutdown:
-            try:
-                await self._connect()
-            except UpdateFailed as err:
-                _LOGGER.warning("Reconnection failed: %s", err)
-                self._schedule_reconnect()
+        """Attempt to reconnect after a delay with exponential backoff."""
+        # Calculate delay with exponential backoff: 10s, 20s, 40s, 80s, ... up to max
+        base_delay = 10
+        delay = min(base_delay * (2 ** self._reconnect_attempts), self._max_reconnect_delay)
+        self._reconnect_attempts += 1
+
+        _LOGGER.info(
+            "FAH client %s: scheduling reconnect in %d seconds (attempt %d)",
+            self.host, delay, self._reconnect_attempts
+        )
+        await asyncio.sleep(delay)
+
+        if self._shutdown:
+            return
+
+        try:
+            await self._connect()
+        except UpdateFailed as err:
+            _LOGGER.warning("Reconnection to %s failed: %s", self.host, err)
+            self._schedule_reconnect()
+        except Exception as err:
+            _LOGGER.exception("Unexpected error during reconnection to %s: %s", self.host, err)
+            self._schedule_reconnect()
 
     async def _disconnect(self) -> None:
         """Disconnect WebSocket."""
+        self._connected = False
         if self._ws is not None and not self._ws.closed:
-            await self._ws.close()
+            try:
+                await self._ws.close()
+            except Exception:
+                pass  # Ignore errors during close
         self._ws = None
+
+    async def _cleanup_session(self) -> None:
+        """Clean up existing session and websocket."""
+        await self._disconnect()
+        if self._session is not None and not self._session.closed:
+            try:
+                await self._session.close()
+            except Exception:
+                pass  # Ignore errors during close
+        self._session = None
 
     async def async_shutdown(self) -> None:
         """Shutdown coordinator."""
+        _LOGGER.info("Shutting down FAH coordinator for %s", self.host)
         self._shutdown = True
 
         if self._listen_task is not None:
@@ -259,11 +312,7 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except asyncio.CancelledError:
                 pass
 
-        await self._disconnect()
-
-        if self._session is not None and not self._session.closed:
-            await self._session.close()
-        self._session = None
+        await self._cleanup_session()
 
     async def async_send_command(self, command: dict[str, Any]) -> None:
         """Send command to FAH client.
@@ -273,24 +322,27 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             {"cmd": "state", "state": "fold"}
             {"cmd": "state", "state": "finish"}
         """
+        _LOGGER.info("Sending command to FAH %s: %s (connected: %s)", self.host, command, self._connected)
+
         # Try to send, reconnecting if necessary
         for attempt in range(2):
             if self._ws is None or self._ws.closed:
+                _LOGGER.info("FAH %s: WebSocket not connected, attempting to connect...", self.host)
                 try:
                     await self._connect()
                 except UpdateFailed as err:
-                    _LOGGER.error("Cannot send command, connection failed: %s", err)
+                    _LOGGER.error("Cannot send command to %s, connection failed: %s", self.host, err)
                     return
 
             if self._ws is not None:
                 try:
                     await self._ws.send_str(json.dumps(command))
-                    _LOGGER.debug("Sent command to FAH: %s", command)
+                    _LOGGER.info("Sent command to FAH %s: %s", self.host, command)
                     return
                 except (aiohttp.ClientError, ConnectionResetError) as err:
-                    _LOGGER.warning("Failed to send command (attempt %d): %s", attempt + 1, err)
+                    _LOGGER.warning("Failed to send command to %s (attempt %d): %s", self.host, attempt + 1, err)
                     # Force reconnect on next attempt
                     await self._disconnect()
                     if attempt == 0:
                         continue
-                    _LOGGER.error("Failed to send command after retry: %s", err)
+                    _LOGGER.error("Failed to send command to %s after retry: %s", self.host, err)
