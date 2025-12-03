@@ -52,7 +52,12 @@ class FAHConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 return self.async_create_entry(
                     title=machine_info.get("mach_name", host),
-                    data={CONF_HOST: host, CONF_PORT: port},
+                    data={
+                        CONF_HOST: host,
+                        CONF_PORT: port,
+                        "machine_id": machine_id,
+                        "machine_name": machine_info.get("mach_name", "FAH Client"),
+                    },
                 )
             except asyncio.TimeoutError:
                 errors["base"] = "timeout"

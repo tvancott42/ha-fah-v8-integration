@@ -15,8 +15,22 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate old entry data to new format."""
+    if "machine_id" not in entry.data:
+        # Use entry.unique_id which was set to machine_id during config flow
+        if entry.unique_id:
+            new_data = {**entry.data, "machine_id": entry.unique_id}
+            hass.config_entries.async_update_entry(entry, data=new_data)
+            _LOGGER.info("Migrated FAH entry %s with machine_id %s", entry.title, entry.unique_id)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Folding@home from config entry."""
+    # Ensure migration happens
+    await async_migrate_entry(hass, entry)
+
     host = entry.data[CONF_HOST]
     port = entry.data[CONF_PORT]
 

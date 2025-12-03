@@ -51,9 +51,10 @@ class FAHBaseSensor(CoordinatorEntity[FAHDataUpdateCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._entry = entry
 
-        info = (coordinator.data.get("info") or {}) if coordinator.data else {}
-        self._machine_id = info.get("id", entry.entry_id)
-        self._machine_name = info.get("mach_name", "FAH Client")
+        # Use machine_id from entry data (set during config flow) for stable identification
+        # Fall back to entry.unique_id (also the machine_id) or entry_id as last resort
+        self._machine_id = entry.data.get("machine_id") or entry.unique_id or entry.entry_id
+        self._machine_name = entry.data.get("machine_name", "FAH Client")
 
     @property
     def device_info(self) -> DeviceInfo:
