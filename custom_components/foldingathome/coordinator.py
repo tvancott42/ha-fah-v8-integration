@@ -324,6 +324,18 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
         _LOGGER.info("Sending command to FAH %s: %s (connected: %s)", self.host, command, self._connected)
 
+        # Reset backoff on user action - they want control now
+        self._reconnect_attempts = 0
+
+        # Cancel any pending reconnect task since we're connecting now
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
+            try:
+                await self._reconnect_task
+            except asyncio.CancelledError:
+                pass
+            self._reconnect_task = None
+
         # Try to send, reconnecting if necessary
         for attempt in range(2):
             if self._ws is None or self._ws.closed:
