@@ -169,9 +169,18 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
 
         _LOGGER.debug("FAH WebSocket listener started for %s", self.host)
+        # FAH sends updates every ~1 second when active, use 60s timeout to detect dead connections
+        receive_timeout = 60
+
         try:
-            async for msg in self._ws:
-                if self._shutdown:
+            while not self._shutdown:
+                try:
+                    msg = await asyncio.wait_for(
+                        self._ws.receive(),
+                        timeout=receive_timeout
+                    )
+                except asyncio.TimeoutError:
+                    _LOGGER.warning("FAH %s: no data received for %ds, assuming dead connection", self.host, receive_timeout)
                     break
 
                 if msg.type == aiohttp.WSMsgType.TEXT:
