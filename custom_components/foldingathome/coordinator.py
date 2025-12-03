@@ -224,8 +224,8 @@ class FAHDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._shutdown:
             return
 
-        # Increase delay for next time (exponential backoff, max 5 min)
-        self._reconnect_delay = min(self._reconnect_delay * 2, 300)
+        # Increase delay for next time (exponential backoff, max 30 sec)
+        self._reconnect_delay = min(self._reconnect_delay * 2, 30)
 
         try:
             await self._connect()
