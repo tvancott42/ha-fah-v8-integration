@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git -C \"C:\\Users\\tjvc4\\OneDrive\\PersonalProjects\\ha-fah-v8-integration\" status)",
       "Bash(git -C \"C:\\Users\\tjvc4\\OneDrive\\PersonalProjects\\ha-fah-v8-integration\" diff)",
-      "Bash(git -C \"C:\\Users\\tjvc4\\OneDrive\\PersonalProjects\\ha-fah-v8-integration\" log --oneline -5)"
+      "Bash(git -C \"C:\\Users\\tjvc4\\OneDrive\\PersonalProjects\\ha-fah-v8-integration\" log --oneline -5)",
+      "Bash(ssh root@nas:*)"
     ],
     "deny": [],
     "ask": []
